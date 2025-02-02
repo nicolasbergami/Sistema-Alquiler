@@ -30,9 +30,14 @@
     </div>
 
     <div class="filter">
-      <button id="vencimientoButton" onclick="filterByExpiration()">Filtrar por Vencimiento</button>
+      <button id="vencimientoButton" onclick="filterByExpiration()">Filtrar por Alquilados </button>
       <button id="listarButton" onclick="listarProductos()">Listar Todos</button>
     </div>
+    <button id="view-income-btn" style="background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px;">
+      📊 Ver Ingresos
+  </button>
+    <button id="restart-app">🔄 Reiniciar Aplicación</button>
+  
   </div>
 
   <!-- Tabla de productos -->
@@ -81,9 +86,32 @@
         </thead>
         <tbody>
             <!-- Aquí se llenará la lista de clientes -->
+            
         </tbody>
+        
+
+
     </table>
+    <div id="pagination-controls" style="margin-top: 20px; text-align: center;"></div>
 </div>
+<div id="income-modal" class="modal hidden">
+  <div class="modal-content">
+      <h2>📊 Ingresos Generados</h2>
+      <table>
+          <thead>
+              <tr>
+                  <th>Periodo</th>
+                  <th>Total Generado</th>
+              </tr>
+          </thead>
+          <tbody id="income-table-body">
+              <!-- Aquí se llenarán los ingresos -->
+          </tbody>
+      </table>
+      <button onclick="closeIncomeModal()">Cerrar</button>
+  </div>
+</div>
+
 
 
   <!-- Tabla de resumen de cantidades por producto -->
@@ -101,22 +129,29 @@
   </table>
 
 
-  <!-- Formulario de cambio de estado -->
-  <div id="status-form" class="modal hidden">
-    <h2>Cambiar estado</h2>
-    <div>
+<!-- Formulario de cambio de estado -->
+<div id="status-form" class="modal hidden">
+  <h2>Cambiar estado</h2>
+  <div>
       <input type="text" id="cliente-dni" placeholder="DNI del Cliente" required />
       <button id="load-client-data" style="margin-left: 10px;">Cargar Datos</button>
-    </div>
-    <input type="text" id="cliente" placeholder="Nombre del Cliente" required readonly />
-    <input type="text" id="telefono" placeholder="Teléfono del Cliente" required readonly />
-    <input type="text" id="direccion" placeholder="Dirección del Cliente" required readonly />
-    <input type="text" id="periodo" placeholder="Periodo de préstamo" required />
-    <label for="pago">Pago realizado:</label>
-    <input type="checkbox" id="pago" />
-    <button id="save-status">Guardar</button>
-    <button id="cancel-status">Cancelar</button>
   </div>
+  <input type="text" id="cliente" placeholder="Nombre del Cliente" required readonly />
+  <input type="text" id="telefono" placeholder="Teléfono del Cliente" required readonly />
+  <input type="text" id="direccion" placeholder="Dirección del Cliente" required readonly />
+  
+  <label for="inicio-mes">Desde:</label>
+  <select id="inicio-mes" required></select>
+  
+  <label for="fin-mes">Hasta:</label>
+  <select id="fin-mes" required></select>
+
+
+  <input type="checkbox" id="pago" />
+  <button id="save-status">Guardar</button>
+  <button id="cancel-status">Cancelar</button>
+</div>
+
 
 
 

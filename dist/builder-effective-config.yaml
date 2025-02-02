@@ -1,0 +1,13 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.myapp.id
+win:
+  target: nsis
+  icon: path/to/your/icon.ico
+  sign: false
+  extraFiles:
+    - from: path/to/ffmpeg.dll
+      to: ffmpeg.dll
+files: []
+electronVersion: 33.3.2

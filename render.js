@@ -19,61 +19,65 @@ let editingProductId = null;
 let changingStatusId = null;
 let allProducts = []; // Variable para almacenar todos los productos
 
-// Inicializar Flatpickr para el campo periodo (rango de fechas)
-flatpickr(periodoInput, {
-  enableTime: false,
-  dateFormat: "Y-m-d",
-  mode: "range", // Permite seleccionar un rango de fechas
-  minDate: "today", // Fecha mínima para la selección
+document.addEventListener("DOMContentLoaded", () => {
+  const periodoInput = document.getElementById('periodo');
+
+  if (periodoInput) {
+    flatpickr(periodoInput, {
+      enableTime: false,
+      dateFormat: "Y-m-d",
+      mode: "range",
+      minDate: "today",
+    });
+  } else {
+    console.warn("⚠️ No se encontró el input con id='periodo'.");
+  }
 });
+
 
 // Cargar los productos desde la API (ajusta según tu backend)
 async function loadProducts() {
-  console.log("Cargando productos...");  // Paso de depuración para verificar que la función se ejecuta
+  console.log("🟢 Cargando productos...");
   try {
-    const products = await window.api.getProducts(); // Ajusta según tu API
-    console.log("Productos obtenidos:", products); // Verificar los productos que se obtienen de la API
-    allProducts = products; // Almacenar todos los productos en la variable global
-
-    renderProducts(products); // Renderizar productos
-    renderProductSummary(products); // Renderizar resumen de productos
-
+    const products = await window.api.getProducts();
+    console.log("🔍 Productos obtenidos:", products); // <--- LOG IMPORTANTE
+    if (!products || products.length === 0) {
+      console.warn("⚠️ No se encontraron productos en la base de datos.");
+    }
+    allProducts = products || [];
+    renderProducts(allProducts);
+    renderProductSummary(allProducts);
   } catch (error) {
-    console.error("Error al cargar los productos:", error);
+    console.error("❌ Error al cargar productos:", error);
   }
 }
 
 // Modificación de la función renderProducts
-function renderProducts(products) {
+async function renderProducts(products) {
   productTable.innerHTML = ''; // Limpiar la tabla de productos antes de cargar nuevos productos
 
   // Agrupar productos por nombre
   const groupedProducts = products.reduce((groups, product) => {
     if (!groups[product.nombre]) {
-      groups[product.nombre] = { ...product, detalles: [], cantidad: 0, estado: 'Disponible' }; // Estado inicial ajustado a "Disponible"
+      groups[product.nombre] = { ...product, detalles: [], cantidad: 0, estado: 'Disponible' };
     }
     groups[product.nombre].cantidad += product.cantidad;
     groups[product.nombre].detalles.push(product);
 
-    // Determinar estado general: Si la cantidad de productos "No disponible" es igual a la cantidad total, el estado es "No disponible"
+    // Determinar estado general del producto (Disponible o No Disponible)
     const unavailableCount = groups[product.nombre].detalles.filter(p => p.estado === 'No disponible').length;
-    if (unavailableCount === groups[product.nombre].cantidad) {
-      groups[product.nombre].estado = 'No disponible';
-    } else {
-      groups[product.nombre].estado = 'Disponible';
-    }
+    groups[product.nombre].estado = (unavailableCount === groups[product.nombre].cantidad) ? 'No disponible ❌ ' : 'Disponible 🟢';
 
     return groups;
   }, {});
 
   // Renderizar productos agrupados
-  Object.values(groupedProducts).forEach((productGroup) => {
+  for (const productGroup of Object.values(groupedProducts)) {
     const generalSeparator = document.createElement('tr');
     generalSeparator.innerHTML = `<td colspan="11" style="border-bottom: 1px solid #ddd; padding: 5px 0;"></td>`;
     productTable.appendChild(generalSeparator);
 
     const row = document.createElement('tr');
-
     row.innerHTML = `
           <td>${productGroup.id}</td>
           <td>${productGroup.nombre}</td>
@@ -85,7 +89,6 @@ function renderProducts(products) {
           <td></td> <!-- Espacio vacío para Periodo -->
           <td></td> <!-- Espacio vacío para Dirección -->
           <td></td> <!-- Espacio vacío para pago -->
-          
           <td class="action-buttons">
               <button class="details" onclick="toggleDetails('${productGroup.nombre}')" style="background-color: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 3px;">Ver Detalles</button>
               <button class="edit-all" onclick="openEditAllModal('${productGroup.nombre}')" style="background-color: #ffc107; color: black; border: none; padding: 5px 10px; border-radius: 3px;">Editar Todos</button>
@@ -93,42 +96,154 @@ function renderProducts(products) {
               <button class="add-product" onclick="addGeneralProduct('${productGroup.nombre}', ${productGroup.precio})" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px;">Agregar</button>
           </td>
       `;
-
     productTable.appendChild(row);
+
     // Agregar separador entre grupo general y detalles
     const separatorRow = document.createElement('tr');
     separatorRow.innerHTML = `<td colspan="11" style="border-top: 1px solid #ddd; padding: 5px 0;"></td>`;
     productTable.appendChild(separatorRow);
 
-    // Fila oculta para los detalles de los productos
-    productGroup.detalles.forEach((detail) => {
+    // Renderizar productos individuales y sus pagos
+    for (const detail of productGroup.detalles) {
+      // Obtener pagos desde la base de datos
+      const pagos = await window.api.getPagosByProducto(detail.id);
+      console.log(`Pagos del producto ${detail.id}:`, pagos); // 🔍 Verifica en consola
+
+      // Verificar si hay pagos pendientes
+      const tienePagosPendientes = pagos.some(pago => pago.estado_pago !== 'pagado');
+      let estadoPago = '';
+      if (detail.estado === 'No disponible') {
+        estadoPago = tienePagosPendientes ? '❌ Debe Pagos' : '✅ Pagado';
+      }
+
       const detailRow = document.createElement('tr');
       detailRow.classList.add('product-details', 'hidden');
       detailRow.setAttribute('data-product-name', productGroup.nombre);
-
       detailRow.innerHTML = `
-              <td>${detail.id}</td>
-              <td>${detail.nombre}</td>
-              <td>${detail.precio}</td>
-              <td>${detail.cantidad}</td>
-              <td>${detail.estado}</td>
-              <td>${detail.cliente || ''}</td> <!-- Mostrar cliente -->
-              <td>${detail.telefono || ''}</td> <!-- Mostrar teléfono -->
-              <td>${detail.periodo || ''}</td> <!-- Mostrar periodo -->
-              <td>${detail.direccion || ''}</td> <!-- Mostrar dirección -->
-              <td>${detail.pago ? 'Sí' : 'No'}</td> <!-- Mostrar estado de pago -->
-              <td class="action-buttons">
-                  <button class="edit" onclick="editProduct(${detail.id})">Editar</button>
-                  <button class="delete" onclick="deleteProduct(${detail.id})">Eliminar</button>
-                  <button class="status" onclick="openStatusForm(${detail.id})">Alquilar</button>
-                  <button class="unlock" onclick="unlockProduct(${detail.id})">Devolver</button>
-              </td>
-          `;
-
+          <td>${detail.id}</td>
+          <td>${detail.nombre}</td>
+          <td>${detail.precio}</td>
+          <td>${detail.cantidad}</td>
+          <td>${detail.estado}</td>
+          <td>${detail.cliente || ''}</td>
+          <td>${detail.telefono || ''}</td>
+          <td> ${detail.periodo || ''}</td>
+          <td>${detail.direccion || ''}</td>
+          <td>${estadoPago}</td> <!-- ✅ Nueva validación de pagos -->
+          <td class="action-buttons">
+              <button class="edit" onclick="editProduct(${detail.id})">Editar</button>
+              <button class="delete" onclick="deleteProduct(${detail.id})">Eliminar</button>
+              <button class="status" onclick="openStatusForm(${detail.id})">Alquilar</button>
+              <button class="unlock" onclick="unlockProduct(${detail.id})">Devolver</button>
+              <button class="view-payments" onclick="togglePagos(${detail.id})">Pagos</button>
+          </td>
+      `;
       productTable.appendChild(detailRow);
-    });
-  });
+
+      // Fila para mostrar pagos mensuales del préstamo
+      const pagosRow = document.createElement('tr');
+      pagosRow.classList.add('hidden');
+      pagosRow.id = `pagos-${detail.id}`;
+      pagosRow.innerHTML = `<td colspan="11"><div id="pagos-list-${detail.id}"></div></td>`;
+      productTable.appendChild(pagosRow);
+    }
+  }
 }
+
+
+// Mostrar los pagos del producto
+async function togglePagos(productId) {
+  console.log("Abriendo pagos para producto ID:", productId);
+
+  try {
+    const pagos = await window.api.getPagosByProducto(productId);
+    console.log("Pagos obtenidos:", pagos);
+
+    if (!pagos.length) {
+      alert("No hay pagos registrados para este producto.");
+      return;
+    }
+
+    const existingModal = document.getElementById("pagos-modal");
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "pagos-modal";
+    modal.className = "modal";
+    modal.innerHTML = `
+          <div class="modal-content">
+              <h2>Estado de Pagos</h2>
+              <table id="pagos-table">
+                  <thead>
+                      <tr>
+                          <th>Mes</th>
+                          <th>Estado</th>
+                          <th>Acción</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${pagos.map(pago => `
+                          <tr>
+                              <td>${pago.mes}</td>
+                              <td>${pago.estado_pago === 'pagado' ? '✅ Pagado' : '❌ Debe'}</td>
+                              <td>
+                                  <button onclick="marcarComoPagado(${pago.id}, ${productId})" 
+                                      ${pago.estado_pago === 'pagado' ? 'disabled' : ''}>
+                                      ${pago.estado_pago === 'pagado' ? '✔️' : '💰 Pagar'}
+                                  </button>
+                              </td>
+                          </tr>
+                      `).join('')}
+                  </tbody>
+              </table>
+              <button onclick="closePagosModal()">Cerrar</button>
+          </div>
+      `;
+
+    modal.style.position = "fixed";
+    modal.style.top = "50%";
+    modal.style.left = "50%";
+    modal.style.transform = "translate(-50%, -50%)";
+    modal.style.background = "#fff";
+    modal.style.padding = "20px";
+    modal.style.boxShadow = "0px 4px 8px rgba(0,0,0,0.2)";
+    modal.style.borderRadius = "10px";
+    modal.style.zIndex = "1000";
+
+    document.body.appendChild(modal);
+
+  } catch (error) {
+    console.error("Error al obtener pagos:", error);
+  }
+}
+
+
+// ✅ Función para marcar un mes como pagado
+async function marcarComoPagado(pagoId, productId) {
+  try {
+    await window.api.updatePago(pagoId, { estado_pago: 'pagado' });
+
+    alert("Pago registrado correctamente.");
+
+    // 🔄 Recargar el modal de pagos
+    togglePagos(productId);
+
+    // 🔄 Recargar los productos para actualizar la columna "Pago"
+    loadProducts();
+  } catch (error) {
+    console.error("Error al marcar pago:", error);
+  }
+}
+
+
+// ❌ Función para cerrar el modal
+function closePagosModal() {
+  const modal = document.getElementById("pagos-modal");
+  if (modal) modal.remove();
+}
+
+
+
 
 
 // Función para mostrar u ocultar los detalles de un grupo de productos
@@ -386,18 +501,42 @@ function openStatusForm(id) {
 
 // Guardar el estado cambiado
 saveStatusButton.addEventListener('click', async () => {
-  const cliente = clienteInput.value;
-  const telefono = telefonoInput.value; // Obtener el valor del campo de teléfono
-  const direccion = direccionInput.value; // Obtener el valor del campo de dirección
-  const periodo = periodoInput.value;
-  const pago = pagoInput.checked; // Obtener el valor del campo de pago
+  const dni = document.getElementById('cliente-dni').value.trim();
+  const nombre = document.getElementById('cliente').value.trim();
+  const telefono = document.getElementById('telefono').value.trim();
+  const direccion = document.getElementById('direccion').value.trim();
+  const inicioMes = inicioMesSelect.value;
+  const finMes = finMesSelect.value;
+  const pago = pagoInput.checked;
 
-  console.log("Guardando estado con cliente:", cliente, "teléfono:", telefono, "dirección:", direccion, "periodo:", periodo, "pago:", pago); // Verificar datos del formulario
+  console.log("🟢 Enviando datos para actualizar estado:", {
+    dni, nombre, telefono, direccion, inicioMes, finMes, pago, changingStatusId
+  });
 
-  await window.api.updateStatus(changingStatusId, cliente, telefono, direccion, periodo, pago);
-  loadProducts();
-  closeStatusForm();
+  // 🔴 Si algún campo está vacío, mostramos un error y detenemos el guardado.
+  if (!dni || !nombre || !telefono || !direccion || !inicioMes || !finMes) {
+    alert('⚠️ Por favor, completa todos los datos antes de guardar.');
+    return;
+  }
+
+  try {
+    await window.api.updateStatus(changingStatusId, {
+      cliente: nombre,
+      telefono,
+      direccion,
+      inicioMes,
+      finMes,
+      pago,
+    });
+
+    console.log('✅ Estado actualizado correctamente.');
+    loadProducts(); // Recargar la tabla de productos después de actualizar
+    closeStatusForm(); // Cerrar el formulario
+  } catch (error) {
+    console.error('❌ Error al guardar la reserva:', error);
+  }
 });
+
 
 // Cancelar cambio de estado
 cancelStatusButton.addEventListener('click', closeStatusForm);
@@ -414,33 +553,46 @@ function closeStatusForm() {
 
 // Desbloquear producto
 async function unlockProduct(id) {
-  console.log("Desbloqueando producto con ID:", id); // Verificar desbloqueo
-  // Actualizar cliente, teléfono, periodo, dirección y estado en la base de datos
-  await window.api.updateProduct(id, {
-    estado: 'Disponible',
-    cliente: '',
-    telefono: '', // Limpiar el campo de teléfono
-    direccion: '', // Limpiar el campo de dirección
-    periodo: '',
-    pago: false // Limpiar el campo de pago
-  });
+  console.log("🔄 Devolviendo producto con ID:", id); // Depuración
 
-  // Recargar productos para reflejar los cambios en la tabla
-  loadProducts();
+  try {
+    // 🔥 Eliminar todos los pagos asociados a este producto
+    await window.api.deletePagosByProducto(id);
+    console.log(`✅ Todos los pagos del producto ${id} han sido eliminados.`);
+
+    // 🔄 Actualizar el estado del producto en la base de datos
+    await window.api.updateProduct(id, {
+      estado: 'Disponible',
+      cliente: '',
+      telefono: '',
+      direccion: '',
+      periodo: '',
+      pago: false // Asegurar que no quede marcado como pagado
+    });
+
+    console.log(`✅ Producto ${id} devuelto y actualizado a Disponible.`);
+    loadProducts(); // Recargar la tabla de productos para reflejar cambios
+  } catch (error) {
+    console.error("❌ Error al devolver el producto:", error);
+    alert("Hubo un problema al devolver el producto. Intenta nuevamente.");
+  }
 }
+
 document.getElementById('add-client-btn').addEventListener('click', () => {
   const modal = document.createElement('div');
   modal.className = 'modal';
+  modal.id = 'add-client-modal';
+
   modal.innerHTML = `
-      <div class="modal-content" style="width: 400px; padding: 20px; border-radius: 10px; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); font-family: Arial, sans-serif;">
-          <h2 style="font-size: 18px; margin-bottom: 15px; text-align: center;">Agregar Cliente</h2>
-          <form id="add-client-form" style="display: grid; gap: 10px; font-size: 14px;">
+      <div class="modal-content">
+          <h2>Agregar Cliente</h2>
+          <form id="add-client-form">
               <label>Nombre:</label>
               <input type="text" id="cliente-nombre" required>
               <label>Dirección:</label>
               <input type="text" id="cliente-direccion" required>
-              <label>DNI:</label>
-              <input type="text" id="cliente-dni" required>
+              <label> DNI:</label>
+              <input type="text" id="dni" required>
               <label>Teléfono:</label>
               <input type="text" id="cliente-telefono" required>
               <label>Nombre del Garante:</label>
@@ -452,37 +604,55 @@ document.getElementById('add-client-btn').addEventListener('click', () => {
           </form>
       </div>
   `;
+
   document.body.appendChild(modal);
 
-  // Manejar el evento de enviar el formulario
-  document.getElementById('add-client-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-  
-    const clientData = {
-      nombre: document.getElementById('cliente-nombre').value.trim(),
-      direccion: document.getElementById('cliente-direccion').value.trim(),
-      dni: document.getElementById('cliente-dni').value.trim(),
-      telefono: document.getElementById('cliente-telefono').value.trim(),
-      garante_nombre: document.getElementById('garante-nombre').value.trim(),
-      garante_telefono: document.getElementById('garante-telefono').value.trim(),
-    };
-  
-    try {
-      console.log('Enviando datos del cliente:', clientData);
-      await window.api.addClient(clientData);
-      alert('Cliente agregado correctamente.');
-      document.body.removeChild(modal); // Cierra el formulario modal
-      loadClients(); // Recargar la lista de clientes
-    } catch (error) {
-      console.error('Error al agregar cliente:', error);
-      alert('Ocurrió un error al agregar el cliente. Por favor, intenta nuevamente.');
+  // **Esperar a que el DOM cargue completamente antes de capturar el evento**
+  setTimeout(() => {
+    const form = document.getElementById('add-client-form');
+    if (!form) {
+      console.error("❌ No se encontró el formulario en el modal.");
+      return;
     }
-  });
 
-  // Manejar el botón de cancelar
-  document.getElementById('cancel-client-btn').addEventListener('click', () => {
-    document.body.removeChild(modal);
-  });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const dniInput = document.getElementById('dni');
+      console.log("Valor del DNI:", dniInput.value);
+      if (!dniInput || dniInput.value.trim() === "") {
+        alert("❌ Error: El DNI es obligatorio.");
+        console.error("❌ Error: No se capturó el DNI correctamente.");
+        return;
+      }
+
+      const clientData = {
+        nombre: document.getElementById('cliente-nombre').value.trim(),
+        direccion: document.getElementById('cliente-direccion').value.trim(),
+        dni: document.getElementById('dni').value.trim(),
+        telefono: document.getElementById('cliente-telefono').value.trim(),
+        garante_nombre: document.getElementById('garante-nombre').value.trim(),
+        garante_telefono: document.getElementById('garante-telefono').value.trim(),
+      };
+
+      console.log("📤 Enviando cliente al backend:", clientData);
+
+      try {
+        await window.api.addClient(clientData);
+        alert("✅ Cliente agregado correctamente.");
+        document.body.removeChild(modal);
+        loadClients(); // Recargar la tabla de clientes
+      } catch (error) {
+        console.error("❌ Error al agregar cliente en frontend:", error);
+        alert("❌ Error al agregar el cliente.");
+      }
+    });
+
+    document.getElementById('cancel-client-btn').addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+  }, 100); // 🔴 Espera 100ms para asegurar que el modal está cargado antes de agregar eventos
 });
 
 
@@ -491,119 +661,139 @@ document.getElementById('cliente-dni').addEventListener('blur', async () => {
   if (!dni) return;
 
   try {
-      // Llamada al backend para obtener datos del cliente
-      const client = await window.api.getClientByDni(dni);
+    // Llamada al backend para obtener datos del cliente
+    const client = await window.api.getClientByDni(dni);
 
-      if (client) {
-          // Completar los campos del formulario automáticamente
-          document.getElementById('cliente').value = client.nombre;
-          document.getElementById('telefono').value = client.telefono;
-          document.getElementById('direccion').value = client.direccion;
+    if (client) {
+      // Completar los campos del formulario automáticamente
+      document.getElementById('cliente').value = client.nombre;
+      document.getElementById('telefono').value = client.telefono;
+      document.getElementById('direccion').value = client.direccion;
 
-          console.log('Cliente encontrado:', client);
-      } else {
-          alert('Cliente no encontrado. Por favor, verifica el DNI.');
-          document.getElementById('cliente').value = '';
-          document.getElementById('telefono').value = '';
-          document.getElementById('direccion').value = '';
-      }
+      console.log('Cliente encontrado:', client);
+    } else {
+      alert('Cliente no encontrado. Por favor, verifica el DNI.');
+      document.getElementById('cliente').value = '';
+      document.getElementById('telefono').value = '';
+      document.getElementById('direccion').value = '';
+    }
   } catch (error) {
-      console.error('Error al buscar el cliente:', error);
+    console.error('Error al buscar el cliente:', error);
   }
 });
 
 
-saveStatusButton.addEventListener('click', async () => {
-  const dni = document.getElementById('cliente-dni').value;
-  const nombre = document.getElementById('cliente').value;
-  const telefono = document.getElementById('telefono').value;
-  const direccion = document.getElementById('direccion').value;
-  const periodo = document.getElementById('periodo').value;
-  const pago = document.getElementById('pago').checked;
 
-  if (!dni || !nombre || !telefono || !direccion) {
-      alert('Por favor, completa todos los datos del cliente.');
+// Número de clientes por página
+const clientsPerPage = 10;
+
+// Función para cargar los clientes con paginación
+async function loadClients(page = 1) {
+  try {
+    console.log("📥 Solicitando clientes desde la API...");
+    const clients = await window.api.getClients(); // Obtenemos los clientes
+    allClients = clients; // Guardamos los clientes en la variable global
+
+    if (!clients || !Array.isArray(clients) || clients.length === 0) {
+      console.warn("⚠️ No hay clientes en la base de datos.");
+      renderClients([], 1); // Si no hay clientes, se renderiza la tabla vacía
       return;
-  }
+    }
 
-  try {
-      // Actualizar el estado del producto
-      await window.api.updateStatus(changingStatusId, {
-          cliente: nombre,
-          telefono,
-          direccion,
-          periodo,
-          pago,
-      });
-
-      console.log('Reserva guardada correctamente.');
-      loadProducts(); // Recargar la tabla de productos
-      closeStatusForm(); // Cerrar el formulario
+    renderClients(clients, page); // Renderizamos los clientes para la página solicitada
   } catch (error) {
-      console.error('Error al guardar la reserva:', error);
-  }
-});
-
-
-
-
-let allClients = []; // Variable global para almacenar todos los clientes
-
-// Función para cargar y renderizar clientes
-async function loadClients() {
-  try {
-      // Obtener los clientes desde el backend
-      const clients = await window.api.getClients(); // Implementar en el backend
-      allClients = clients; // Guardar los clientes en la variable global
-
-      // Renderizar la tabla de clientes
-      const tbody = document.getElementById('cliente-table').querySelector('tbody');
-      tbody.innerHTML = ''; // Limpiar la tabla antes de renderizar
-      clients.forEach((client) => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-              <td>${client.id}</td>
-              <td>${client.nombre}</td>
-              <td>${client.direccion}</td>
-              <td>${client.dni}</td>
-              <td>${client.telefono}</td>
-              <td>${client.garante_nombre} (${client.garante_telefono})</td>
-              <td>
-                  <button onclick="editClient(${client.id})">Editar</button>
-                  <button onclick="deleteClient(${client.id})">Eliminar</button>
-              </td>
-          `;
-          tbody.appendChild(row);
-      });
-  } catch (error) {
-      console.error('Error al cargar los clientes:', error);
+    console.error("❌ Error al cargar los clientes:", error);
   }
 }
+
+// Función para renderizar los clientes con paginación
+function renderClients(clients, page = 1) {
+  const tbody = document.getElementById('cliente-table').querySelector('tbody');
+  tbody.innerHTML = ''; // Limpiar la tabla antes de renderizar
+
+  // Calcular los índices de paginación
+  const startIndex = (page - 1) * clientsPerPage;
+  const endIndex = startIndex + clientsPerPage;
+  const paginatedClients = clients.slice(startIndex, endIndex); // Seleccionar los clientes para la página
+
+  paginatedClients.forEach(client => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${client.id}</td>
+      <td>${client.nombre}</td>
+      <td>${client.direccion}</td>
+      <td>${client.dni}</td>
+      <td>${client.telefono}</td>
+      <td>${client.garante_nombre} (${client.garante_telefono})</td>
+      <td>
+        <button onclick="editClient(${client.id})">Editar</button>
+        <button onclick="deleteClient(${client.id})">Eliminar</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  renderPaginationControls(clients.length, page); // Renderizamos los controles de paginación
+}
+
+// Función para renderizar los controles de paginación
+function renderPaginationControls(totalClients, currentPage) {
+  const paginationContainer = document.getElementById('pagination-controls');
+  paginationContainer.innerHTML = ''; // Limpiar contenido previo
+
+  const totalPages = Math.ceil(totalClients / clientsPerPage); // Calcular el número total de páginas
+
+  // Crear un botón por cada página
+  for (let i = 1; i <= totalPages; i++) {
+    const button = document.createElement('button');
+    button.innerText = i;
+    button.classList.add('pagination-btn');
+    if (i === currentPage) button.classList.add('active'); // Resaltar la página actual
+
+    button.addEventListener('click', () => {
+      renderClients(allClients, i); // Llamar a la función renderClients cuando se hace clic en un botón
+    });
+
+    paginationContainer.appendChild(button); // Añadir el botón al contenedor de paginación
+  }
+}
+
+
+
+
+
+document.getElementById('restart-app').addEventListener('click', () => {
+  console.log("🔄 Enviando solicitud para reiniciar la aplicación...");
+  window.api.restartApp(); // Llama al método expuesto en preload.js
+});
+
+
+
 
 document.getElementById('load-client-data').addEventListener('click', async () => {
   const dni = document.getElementById('cliente-dni').value;
   console.log('DNI ingresado para búsqueda:', dni); // Verifica el DNI ingresado
 
   if (!dni) {
-      alert('Por favor, ingresa un DNI válido.');
-      return;
+    alert('Por favor, ingresa un DNI válido.');
+    return;
   }
 
   try {
-      const client = await window.api.getClientByDni(dni);
-      console.log('Cliente recibido:', client); // Verifica si el cliente fue recibido
+    const client = await window.api.getClientByDni(dni);
+    console.log('Cliente recibido:', client); // Verifica si el cliente fue recibido
 
-      if (client) {
-          document.getElementById('cliente').value = client.nombre;
-          document.getElementById('telefono').value = client.telefono;
-          document.getElementById('direccion').value = client.direccion;
-          alert('Datos cargados correctamente.');
-      } else {
-          alert('Cliente no encontrado. Por favor, verifica el DNI.');
-      }
+    if (client) {
+      document.getElementById('cliente').value = client.nombre;
+      document.getElementById('telefono').value = client.telefono;
+      document.getElementById('direccion').value = client.direccion;
+      alert('Datos cargados correctamente.');
+    } else {
+      alert('Cliente no encontrado. Por favor, verifica el DNI.');
+    }
   } catch (error) {
-      console.error('Error al buscar el cliente:', error);
-      alert('Ocurrió un error al buscar el cliente. Intenta de nuevo.');
+    console.error('Error al buscar el cliente:', error);
+    alert('Ocurrió un error al buscar el cliente. Intenta de nuevo.');
   }
 });
 
@@ -614,9 +804,9 @@ clientSearchInput.addEventListener('input', () => {
 
   // Filtrar los clientes que coincidan con el término de búsqueda
   const filteredClients = allClients.filter(client =>
-      client.nombre.toLowerCase().includes(searchTerm) ||
-      client.telefono.toLowerCase().includes(searchTerm) ||
-      client.dni.toLowerCase().includes(searchTerm)
+    client.nombre.toLowerCase().includes(searchTerm) ||
+    client.telefono.toLowerCase().includes(searchTerm) ||
+    client.dni.toLowerCase().includes(searchTerm)
   );
 
   // Renderizar la tabla con los clientes filtrados
@@ -624,45 +814,69 @@ clientSearchInput.addEventListener('input', () => {
 });
 
 
-function renderClients(clients) {
-  const tbody = document.getElementById('cliente-table').querySelector('tbody');
-  tbody.innerHTML = ''; // Limpiar la tabla antes de renderizar
 
-  clients.forEach((client) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-          <td>${client.id}</td>
-          <td>${client.nombre}</td>
-          <td>${client.direccion}</td>
-          <td>${client.dni}</td>
-          <td>${client.telefono}</td>
-          <td>${client.garante_nombre} (${client.garante_telefono})</td>
-          <td>
-              <button onclick="editClient(${client.id})">Editar</button>
-              <button onclick="deleteClient(${client.id})">Eliminar</button>
-          </td>
-      `;
-      tbody.appendChild(row);
-  });
-}
 async function deleteClient(clientId) {
   if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
-      try {
-          // Llamada al backend para eliminar al cliente
-          await window.api.deleteClient(clientId);
+    try {
+      // Llamada al backend para eliminar al cliente
+      await window.api.deleteClient(clientId);
 
-          // Actualizar la lista de clientes después de eliminar
-          alert('Cliente eliminado correctamente.');
-          loadClients(); // Recargar la tabla de clientes
-      } catch (error) {
-          console.error('Error al eliminar el cliente:', error);
-          alert('Ocurrió un error al intentar eliminar al cliente.');
-      }
+      // Actualizar la lista de clientes después de eliminar
+      alert('Cliente eliminado correctamente.');
+      loadClients(); // Recargar la tabla de clientes
+    } catch (error) {
+      console.error('Error al eliminar el cliente:', error);
+      alert('Ocurrió un error al intentar eliminar al cliente.');
+    }
   }
 }
+const meses = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
 
+const inicioMesSelect = document.getElementById("inicio-mes");
+const finMesSelect = document.getElementById("fin-mes");
 
+// Generar opciones de meses
+meses.forEach((mes, index) => {
+  const option1 = new Option(mes, index + 1);
+  const option2 = new Option(mes, index + 1);
+  inicioMesSelect.add(option1);
+  finMesSelect.add(option2);
+});
 
+document.getElementById("view-income-btn").addEventListener("click", async () => {
+  console.log("📊 Solicitando ingresos...");
+
+  try {
+    const ingresos = await window.api.getIngresos();
+    console.log("✅ Ingresos obtenidos:", ingresos);
+
+    const incomeTableBody = document.getElementById("income-table-body");
+    incomeTableBody.innerHTML = "";
+
+    ingresos.forEach(ingreso => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+              <td>${ingreso.periodo}</td>
+              <td>$${ingreso.total_ingresos.toFixed(2)}</td>
+          `;
+      incomeTableBody.appendChild(row);
+    });
+
+    document.getElementById("income-modal").classList.remove("hidden");
+
+  } catch (error) {
+    console.error("❌ Error al obtener ingresos:", error);
+    alert("Error al cargar los ingresos. Intenta de nuevo.");
+  }
+});
+
+// Función para cerrar el modal
+function closeIncomeModal() {
+  document.getElementById("income-modal").classList.add("hidden");
+}
 
 
 
@@ -671,5 +885,7 @@ async function deleteClient(clientId) {
 loadProducts();
 
 // Cargar clientes automáticamente en intervalos regulares
-loadClients();
 
+document.addEventListener('DOMContentLoaded', () => {
+  loadClients(1); // Cargar los clientes en la primera página al inicio
+});

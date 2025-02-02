@@ -315,3 +315,103 @@ table td button.unlock:hover {
   background-color: #1e7e34; /* Verde aún más oscuro */
   transform: translateY(1px); /* Mover ligeramente hacia abajo */
 }
+#pagos-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+
+#pagos-table th, #pagos-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+#pagos-table th {
+  background-color: #f4f4f4;
+}
+#restart-app {
+  background-color: #faac04; /* Color amarillo anaranjado */
+  color: white;
+  padding: 10px 15px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 15px;
+  display: block;
+  width: 200px;
+  text-align: center;
+  font-weight: bold;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+#restart-app:hover {
+  background-color: #e69c00;
+}
+#view-income-btn {
+  background-color: #4CAF50; /* Verde */
+  color: white;
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Efecto de brillo al pasar el mouse */
+#view-income-btn:hover {
+  background-color: #45a049;
+  box-shadow: 0px 5px 10px rgba(0, 255, 0, 0.5);
+  transform: scale(1.05);
+}
+
+/* Animación de pulsación al hacer clic */
+#view-income-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Efecto de onda al hacer clic */
+#view-income-btn::after {
+  content: "";
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: scale(0);
+  transition: transform 0.4s ease-out;
+  opacity: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#view-income-btn:active::after {
+  transform: scale(3);
+  opacity: 1;
+}
+
+.pagination-btn {
+  padding: 8px 12px;
+  margin: 5px;
+  border: none;
+  cursor: pointer;
+  background-color: #007bff;
+  color: white;
+  border-radius: 5px;
+}
+
+.pagination-btn.active {
+  background-color: #0056b3;
+  font-weight: bold;
+}
+
+
+
